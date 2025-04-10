@@ -73,8 +73,9 @@ for i in range(0, 16):
     socket.sendto(get_icmp_8(send_seq), (dst, 0))
 
 in_route = True
+is_dst = False
 
-while in_route:
+while True:
     count = 0
     rec_seq = 0
     while True:
@@ -98,17 +99,20 @@ while in_route:
                 break
         if icmp_type == 0:
             if addr[0] == dst:
+                is_dst = True
                 rec_seq = int((packet[26] << 8) + packet[27]) - 1
                 delays[rec_seq // 3][rec_seq % 3] = (t.time() - sending_times[rec_seq // 3][rec_seq % 3]) * 1000
                 src_ips[rec_seq // 3][rec_seq % 3] = addr[0]
                 for i in range(0, 3-(send_seq - rec_seq)):
+                    if ttl > 30:
+                        break
                     send_seq += 1
                     ttl = ((send_seq - 1) // 3) + 1
                     socket.setsockopt(sckt.IPPROTO_IP, sckt.IP_TTL, ttl)
                     sending_times[ttl - 1][(send_seq - 1) % 3] = t.time()
                     socket.sendto(get_icmp_8(send_seq), (dst, 0))
                 count_repl = 1
-                while count_repl < 3:
+                while count_repl < 3 and in_route:
                     try:
                         packet, addr = socket.recvfrom(1024)
                         time_ = t.time()
@@ -134,17 +138,26 @@ while in_route:
                 in_route = False
                 break
 
+
     print_trace(rec_seq)
 
     if not in_route:
-        print_trace(rec_seq)
-        for i in range(0, (2 - rec_seq % 3)):
-            print(' *', end="")
-        break
+        if is_dst:
+            for i in range(0, (2 - rec_seq % 3)):
+                print(' *', end="")
+            break
+        else:
+            print_trace(89)
+            break
+
 
     for i in range(0, count if count != 0 else 16):
         send_seq += 1
         ttl = ((send_seq - 1) // 3) + 1
+        if ttl > 30:
+            in_route = False
+            break
         socket.setsockopt(sckt.IPPROTO_IP, sckt.IP_TTL, ttl)
         socket.sendto(get_icmp_8(send_seq), (dst, 33434))
         sending_times[ttl - 1][(send_seq - 1) % 3] = t.time()
+print()
